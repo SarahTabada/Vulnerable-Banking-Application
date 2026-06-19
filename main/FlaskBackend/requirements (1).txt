@@ -1,0 +1,123 @@
+from flask import Blueprint, request, jsonify
+from app import db
+from app.models.entities import Transfer, Account
+from datetime import datetime
+from app.depends import get_insecure_raw_connection
+import os
+
+transfers_bp = Blueprint("transfers", __name__)
+
+INSECURE = os.getenv("INSECURE", "false").lower() in ("1", "true", "yes", "on")
+
+@transfers_bp.get("/history")
+def transfer_history():
+    transfers = Transfer.query.order_by(Transfer.transfer_date.desc()).limit(25).all()
+    return jsonify({
+        "transfers": [
+            {
+                "id": t.id,
+                "fromAccount": t.from_account,
+                "toAccount": t.to_account or t.external_account,
+                "amount": t.amount,
+                "date": t.transfer_date.isoformat(),
+                "frequency": t.frequency,
+                "memo": t.memo,
+                "status": t.status,
+                "type": t.type
+            } for t in transfers
+        ]
+    })
+
+
+def create_transfer_secure():
+    data = request.json
+    from_account = Account.query.get(data["fromAccount"])
+    to_account_id = data.get("toAccount")
+    to_account = Account.query.get(to_account_id) if to_account_id else None
+
+    if not from_account:
+        return jsonify({"success": False, "error": "From account not found"}), 404
+    if to_account_id and not to_account:
+        return jsonify({"success": False, "error": "To account not found"}), 404
+
+    amount = float(data["amount"])
+
+    # Update account balances
+    if from_account.balance < amount:
+        return jsonify({"success": False, "error": "Insufficient funds"}), 400
+
+    from_account.balance -= amount
+    if to_account:  # Internal transfer
+        to_account.balance += amount
+
+    transfer = Transfer(
+        customer_id="demo",  # TODO: pull from JWT
+        from_account=data["fromAccount"],
+        to_account=data.get("toAccount"),
+        external_account=data.get("externalAccount"),
+        amount=data["amount"],
+        transfer_date=datetime.fromisoformat(data["date"]),
+        memo=data.get("memo"),
+        frequency=data["frequency"],
+        type=data["type"],
+        status="completed"
+    )
+    db.session.add(transfer)
+    db.session.commit()
+    return jsonify({"success": True, "transferId": transfer.id})
+
+
+def create_transfer_insecure():
+    """
+    intentionally vulnerable code
+    """
+
+    data = request.json
+
+    from_acct = data.get("fromAccount")
+    to_acct = data.get("toAccount")
+    amount = data.get("amount")
+    memo = data.get("memo", "")
+    date = data.get("date")
+    transfer_type = data.get("type", "internal")
+
+    with get_insecure_raw_connection() as raw:
+        cur = raw.cursor()
+
+        sql = f"UPDATE accounts SET balance = balance - {amount} WHERE id = {from_acct};"
+        cur.execute(sql)
+        print("INSECURE TRANSFER SQL:", sql)
+
+        # Add to to_account if internal
+        if to_acct:
+            sql = f"UPDATE accounts SET balance = balance + {amount} WHERE id = {to_acct};"
+            cur.execute(sql)
+            print("INSECURE TRANSFER SQL:", sql)
+
+        sql = f"""
+            INSERT INTO transfer
+                (customer_id, from_account, to_account, external_account, 
+                 amount, transfer_date, memo, frequency, type, status)
+            VALUES
+                ('demo', {from_acct}, {to_acct or 'NULL'}, NULL,
+                 {amount}, '{date}', '{memo}', 'Once', '{transfer_type}', 'completed');
+        """
+
+        print("INSECURE TRANSFER SQL:", sql)
+        cur.execute(sql)
+
+        # flush stacked statements if needed
+        while cur.nextset() is not None:
+            pass
+
+        raw.commit()
+        cur.close()
+
+    return jsonify({"success": True, "message": "Insecure transfer executed"})
+
+@transfers_bp.post("/create")
+def authenticate_user():
+    if(INSECURE):
+        return create_transfer_insecure()
+    else:
+        return create_transfer_secure()

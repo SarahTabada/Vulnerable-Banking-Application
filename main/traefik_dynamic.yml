@@ -1,0 +1,39 @@
+  global:
+    checkNewVersion: true #/false [gives new version stuff]
+    sendAnonymousUsage: false # [gives nonpersonal data back to traefik if true]
+  logs:
+    level: DEBUG #[Or INFO (general info), WARN (only warnings), CRITICAL (only erros)]
+    format: common # [json is also an option]
+    # filePath: [eg /var/log/traefik.log] [exclude if stdout]
+  api:
+    dashboard: true 
+    insecure: true 
+  entrypoints:
+    web:
+      address: :80
+      # Drop Redirect stuff here when SSL/TLS
+    websecure:
+      address: :443
+  accesslog:
+    #filepath: “/var/log/accessTraefik.log”  {by default Stdout}
+    format: json
+    bufferingSize: 100 #{can speed things up by writing logs to memory then IO all at once}
+    filters:
+      statusCodes:
+      - 200
+      - 400-404
+      retryAttempts: true #{keeps even if a retry happened}
+      minDuration: 10ms #{if request faster don’t keep it}
+    #fields: {can put many things under here like whether or not to keep headers etc.}
+  providers:
+    docker:
+      watch: true #allows updating the configuration in real time
+      exposedByDefault: false #only containers explicitly given to traefik can use it
+      endpoint: "unix:///var/run/docker.sock"
+      network: proxy
+  tls:
+    stores:
+      default:
+        defaultCertificate:
+          certFile: /certs/tls.crt
+          keyFile: /certs/tls.key

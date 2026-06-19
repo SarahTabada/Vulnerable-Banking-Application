@@ -1,0 +1,10 @@
+"""Compatibility shim: re-export entities from the package.
+
+Some parts of the codebase import `app.models` as a module. The canonical
+SQLAlchemy models live in `app.models.entities`. This file re-exports them to
+avoid import errors.
+"""
+
+from app.models.entities import User, Account, Transaction, Payee, Payment, Transfer
+
+__all__ = ["User", "Account", "Transaction", "Payee", "Payment", "Transfer"]

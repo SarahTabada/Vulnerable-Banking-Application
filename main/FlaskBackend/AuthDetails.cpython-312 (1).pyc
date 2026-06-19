@@ -1,0 +1,24 @@
+from flask import Blueprint, jsonify, request
+
+transactions_bp = Blueprint('transactions_bp', __name__)
+
+
+@transactions_bp.route('/transactions', methods=['GET'])
+def list_transactions():
+    # Defer model import to avoid circular imports at module import time
+    from app.models import Transaction
+
+    account_id = request.args.get('accountId')
+    if account_id:
+        txs = Transaction.query.filter_by(account_id=int(account_id)).all()
+    else:
+        txs = Transaction.query.order_by(Transaction.date.desc()).limit(200).all()
+    return jsonify([t.to_dict() for t in txs])
+
+
+@transactions_bp.route('/transactions/<int:tx_id>', methods=['GET'])
+def transaction_detail(tx_id):
+    from app.models import Transaction
+
+    tx = Transaction.query.get_or_404(tx_id)
+    return jsonify(tx.to_dict())
