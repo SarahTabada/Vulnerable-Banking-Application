@@ -1,6 +1,0 @@
-my_flask_app/.venv/
-my_flask_app/__pycache__/
-my_flask_app/*.pyc
-my_flask_app/*.pyo
-my_flask_app/*.pyd
-my_flask_app/env/

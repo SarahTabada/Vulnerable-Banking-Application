@@ -1,4 +1,0 @@
-- Convert .env files to docker secrets e.g. echo "supersecretkey1234567890" | docker secret create flask_secret_key -
-    Very important because nonencrypted env variables very easy to exploit
-- Double check SQL Configuration for vulnerabilities
-- TLS/SSL or WAF if we want to go crazy
