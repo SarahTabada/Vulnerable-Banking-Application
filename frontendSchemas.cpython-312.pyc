@@ -1,0 +1,70 @@
+from flask import Blueprint, request, redirect, Response, make_response, abort
+from app.utils.AuthDetails import COOKIE_NAME, create_jwt_for_user, verify_jwt, authenticate_user, ExpiredSignatureError, InvalidTokenError
+from app.schemas.frontend.frontendSchemas import LoginRequest
+from flask import jsonify
+
+auth_bp = Blueprint("auth_bp", __name__)
+
+@auth_bp.route("/verify")
+def auth():
+    """
+    This endpoint is called by Traefik ForwardAuth.
+    If valid → return 200 and Traefik forwards the request.
+    If invalid → 401 and redirect to /login.
+    """
+
+    token = request.cookies.get(COOKIE_NAME)
+
+    if not token:
+        return Response(status=401)
+
+    try:
+        verify_jwt(token)
+    except (ExpiredSignatureError, InvalidTokenError):
+        return Response(status=401)
+
+    # Token good — Traefik allows request through
+    return Response(status=200)
+
+@auth_bp.post("/login")
+def login():
+    data = request.get_json() or {}
+    username = data.get('username')
+    password = data.get('password')
+    if not username or not password:
+        return jsonify({'error': 'username and password required'}), 400
+    credentials = LoginRequest(username=username, password=password)
+    user = authenticate_user(credentials)
+    if not user:
+        abort(401, description="Invalid username or password")
+    token = create_jwt_for_user(user)
+    resp = jsonify({'message': 'ok', 'user': user.to_dict()})
+    resp.set_cookie(
+        COOKIE_NAME,
+        token,
+        httponly=True,
+        secure=False,     # True in production
+        samesite="Strict",
+        path="/",
+    )
+    return resp
+
+# Old login
+# @auth_bp.post('/demo_login')
+# def demo_login():
+#     """login endpoint that checks username/password against the DB and returns user JSON."""
+#     data = request.get_json() or {}
+#     username = data.get('username')
+#     password = data.get('password')
+#     if not username or not password:
+#         return jsonify({'error': 'username and password required'}), 400
+
+#     # Import model at runtime to avoid import-time circular dependency
+#     from app.models import User
+
+#     user = User.query.filter_by(username=username).first()
+#     if not user or user.password != password:
+#         return jsonify({'error': 'invalid credentials'}), 401
+
+#     return jsonify({'message': 'ok', 'user': user.to_dict()})
+

@@ -1,0 +1,11 @@
+flask
+flask-cors
+gunicorn
+mysqlclient
+sqlalchemy
+python-dotenv
+flask_sqlalchemy
+pydantic
+bcrypt
+PyJWT
+email-validator

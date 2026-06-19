@@ -1,0 +1,45 @@
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
+from app.config import Config
+
+engine = create_engine(
+    Config.SQLALCHEMY_DATABASE_URI,
+    pool_pre_ping=True,
+)
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+Base = declarative_base()
+
+from contextlib import contextmanager
+
+@contextmanager
+def get_db_session():
+    db = SessionLocal()
+    try:
+        yield db
+        db.commit()
+    except:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+@contextmanager
+def get_insecure_raw_connection():
+    """
+    Returns a raw MySQLdb connection + cursor.
+    Bypasses SQLAlchemy ORM and exposes DBAPI directly.
+    """
+    # Create normal ORM session
+    db = SessionLocal()
+
+    # Get raw DBAPI connection (MySQLdb Connection)
+    raw_conn = db.connection().connection
+
+    try:
+        yield raw_conn
+        raw_conn.commit()   # manual commit
+    except:
+        raw_conn.rollback()
+        raise
+    finally:
+        db.close()
